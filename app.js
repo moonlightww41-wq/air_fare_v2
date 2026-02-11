@@ -14,6 +14,42 @@ const DB = {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+
+// ---- robust fetch helpers (avoid SPA fallback returning index.html) ----
+async function fetchTextFirstOk(urls){
+  let lastErr = null;
+  for (const u of urls){
+    try{
+      const res = await fetch(u, { cache: "no-cache" });
+      if (!res.ok) { lastErr = new Error(`${u} => ${res.status}`); continue; }
+      const txt = await res.text();
+      return { url: u, text: txt, status: res.status };
+    } catch (e){
+      lastErr = e;
+    }
+  }
+  if (lastErr) throw lastErr;
+  throw new Error("fetch failed");
+}
+
+function looksLikeHTML(text){
+  const t = (text ?? "").toString().trim().slice(0,200).toLowerCase();
+  return t.startsWith("<!doctype") || t.startsWith("<html") || t.includes("<head") || t.includes("<body");
+}
+
+function hasAnyKey(obj, keys){
+  return keys.some(k => Object.prototype.hasOwnProperty.call(obj, k));
+}
+
+function validateFareRows(rows){
+  // Accept either JP headers or EN headers (TSV sample)
+  if (!Array.isArray(rows) || !rows.length) return false;
+  const first = rows[0] || {};
+  const jpOk = hasAnyKey(first, ["出発地"]) && hasAnyKey(first, ["到着地"]) && hasAnyKey(first, ["運賃"]);
+  const enOk = hasAnyKey(first, ["origin"]) && hasAnyKey(first, ["destination"]) && hasAnyKey(first, ["fare"]);
+  return jpOk || enOk;
+}
+
 function norm(s){
   return (s ?? "").toString().trim()
     .replace(/[\s\u3000]+/g,"")
@@ -362,20 +398,38 @@ async function loadDB(){
   let fareRows = null;
   let sourceName = '';
 
+  // Candidate URLs (covers: file root, subdir, Netlify/GitHub Pages base URL)
+  const csvUrls = [
+    new URL('./data/transport.csv', location.href).toString(),
+    new URL('data/transport.csv', location.href).toString(),
+    './data/transport.csv',
+    'data/transport.csv',
+  ];
+  const tsvUrls = [
+    new URL('./data/fare_source.tsv', location.href).toString(),
+    new URL('data/fare_source.tsv', location.href).toString(),
+    './data/fare_source.tsv',
+    'data/fare_source.tsv',
+  ];
+
+  // Try CSV first
   try {
-    const res = await fetch("./data/transport.csv", { cache: "no-cache" });
-    if (!res.ok) throw new Error(`transport.csv fetch failed: ${res.status}`);
-    const csv = await res.text();
-    fareRows = parseCSV(csv);
-    sourceName = "transport.csv";
+    const got = await fetchTextFirstOk(csvUrls);
+    if (looksLikeHTML(got.text)) throw new Error(`transport.csv resolved to HTML (SPA fallback). url=${got.url}`);
+    const rows = parseCSV(got.text);
+    if (!validateFareRows(rows)) throw new Error(`transport.csv parsed but missing expected headers. url=${got.url}`);
+    fareRows = rows;
+    sourceName = 'transport.csv';
   } catch (e){
-    // fallback
-    const res = await fetch("./data/fare_source.tsv", { cache: "no-cache" });
-    if (!res.ok) throw new Error(`fare_source.tsv fetch failed: ${res.status}`);
-    const tsv = await res.text();
-    fareRows = parseTSV(tsv);
-    sourceName = "fare_source.tsv";
+    // fallback TSV
+    const got = await fetchTextFirstOk(tsvUrls);
+    if (looksLikeHTML(got.text)) throw new Error(`fare_source.tsv resolved to HTML (SPA fallback). url=${got.url}`);
+    const rows = parseTSV(got.text);
+    if (!validateFareRows(rows)) throw new Error(`fare_source.tsv parsed but missing expected headers. url=${got.url}`);
+    fareRows = rows;
+    sourceName = 'fare_source.tsv';
   }
+
 
   // 2) aliases (optional)
   let aliasRows = [];
@@ -522,6 +576,9 @@ async function loadDB(){
   // UI meta
   const meta = DB.meta;
   $("#dbMeta").textContent = `DB: ${meta.source} / routes=${meta.routes} / fares=${meta.fares} / places=${meta.places} / updated=${meta.updatedAt}`;
+  if (meta.fares === 0 || meta.places === 0){
+    $("#dbMeta").textContent += "  ※DB未反映の可能性：Netlify/GitHub Pagesの公開フォルダに data/ が含まれるか、SPAリダイレクト設定で /data/* を潰していないか確認";
+  }
 }
 
 

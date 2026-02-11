@@ -1,0 +1,5 @@
+# Ensure data files are served as-is (avoid SPA fallback)
+ /data/*  /data/:splat  200
+
+# SPA fallback
+ /*       /index.html   200
