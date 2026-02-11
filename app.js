@@ -6,6 +6,7 @@
 const DB = {
   meta: { loadedAt: null, rowCount: 0 },
   fares: [],         // normalized rows: {from,to,validFrom,validTo,priceType,fare,seasonLabel,srcPeriodStart,srcPeriodEnd}
+  routeMap: new Map(), // normKey(from)||normKey(to) -> fare rows (array)
   places: [],        // canonical places from fares
   aliasToCanon: new Map(), // normalized token -> canonical
 };
@@ -181,19 +182,29 @@ function findFare(date, from, to){
   const f = resolvePlace(from);
   const t = resolvePlace(to);
 
-  // exact direction first
-  let cands = DB.fares.filter(r => r.from === f && r.to === t && inRange(d, r.validFrom, r.validTo));
-  if (cands.length){
-    // if multiple, prefer narrower window then peak? (peak usually higher)
+  // Use routeMap when available (faster and avoids full-scan)
+  const keyFT = normKey(f) + '||' + normKey(t);
+  const keyTF = normKey(t) + '||' + normKey(f);
+  const listFT = DB.routeMap?.get(keyFT) || null;
+  const listTF = DB.routeMap?.get(keyTF) || null;
+
+  const pick = (arr) => {
+    const cands = (arr || []).filter(r => inRange(d, r.validFrom, r.validTo));
+    if (!cands.length) return null;
     cands.sort((a,b)=> (a.validTo-a.validFrom) - (b.validTo-b.validFrom) || (a.priceType === "ピーク" ? -1 : 1));
-    return { hit:true, row:cands[0], from:f, to:t, tried:[`${f}→${t}`] };
+    return cands[0];
+  };
+
+  // exact direction first
+  let best = pick(listFT || DB.fares.filter(r => r.from === f && r.to === t));
+  if (best){
+    return { hit:true, row:best, from:f, to:t, tried:[`${f}→${t}`] };
   }
 
   // try reverse direction (some data may be one-way)
-  cands = DB.fares.filter(r => r.from === t && r.to === f && inRange(d, r.validFrom, r.validTo));
-  if (cands.length){
-    cands.sort((a,b)=> (a.validTo-a.validFrom) - (b.validTo-b.validFrom) || (a.priceType === "ピーク" ? -1 : 1));
-    return { hit:true, row:{...cands[0], note:"※逆方向データを使用"}, from:f, to:t, tried:[`${f}→${t}`, `${t}→${f}`] };
+  best = pick(listTF || DB.fares.filter(r => r.from === t && r.to === f));
+  if (best){
+    return { hit:true, row:{...best, note:"※逆方向データを使用"}, from:f, to:t, tried:[`${f}→${t}`, `${t}→${f}`] };
   }
 
   // no hit
@@ -311,7 +322,10 @@ function renderResults(rows, misses){
   $("#sumFare").textContent = hit ? money(sum) : "-";
   $("#hitCount").textContent = String(hit);
   $("#missCount").textContent = String(rows.length - hit);
-  $("#dbMeta").textContent = DB.meta.loadedAt ? `${DB.meta.loadedAt} / ${DB.meta.rowCount}件` : "-";
+  // keep DB status visible even after search rerenders
+  if (DB.meta?.source){
+    $("#dbMeta").textContent = `DB: ${DB.meta.source} / routes=${DB.meta.routes} / fares=${DB.meta.fares} / places=${DB.meta.places} / updated=${DB.meta.updatedAt}`;
+  }
 
   // diagnostics
   const missLines = misses.map(m => `- ${ymd(m.leg.date)} ${m.from}→${m.to} | tried: ${m.tried.join(" / ")}\n  candidates: ${m.near?.map(n=>`${n.from}→${n.to} ${ymd(n.validFrom)}〜${ymd(n.validTo)} ${n.priceType} ${money(n.fare)}`).join(" | ") || "-"}`).join("\n");
@@ -493,7 +507,8 @@ async function loadDB(){
   }
 
   // store
-  DB.fares = map;
+  DB.fares = fares;
+  DB.routeMap = map;
   DB.places = places;
   DB.aliasToCanon = aliasToCanon;
   DB.meta = {
