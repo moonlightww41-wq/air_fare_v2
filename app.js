@@ -15,6 +15,43 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 
+
+// ---- key normalization & flexible column mapping ----
+function stripBOM(s){ return (s || '').toString().replace(/^\uFEFF/, ''); }
+function normHeaderKey(k){
+  return stripBOM(k)
+    .replace(/[\u3000\s]+/g,'')   // remove spaces (incl full-width)
+    .replace(/[()（）\[\]【】]/g,'')
+    .replace(/[‐‑–—―ー]/g,'-')
+    .toLowerCase();
+}
+function canonicalKey(k){
+  const nk = normHeaderKey(k);
+  // JP / EN variants -> canonical tokens
+  if (['出発地','発地','出発','from','origin','出発場所','発駅','乗車地'].some(x=>nk.includes(normHeaderKey(x)))) return 'from';
+  if (['到着地','着地','到着','to','destination','到着場所','着駅','降車地'].some(x=>nk.includes(normHeaderKey(x)))) return 'to';
+  if (['運賃','金額','料金','fare','price','運賃額'].some(x=>nk.includes(normHeaderKey(x)))) return 'fare';
+  if (['価格タイプ','価格ﾀｲﾌﾟ','シーズン','season','type','区分'].some(x=>nk.includes(normHeaderKey(x)))) return 'priceType';
+  if (['搭乗期間開始','搭乗開始','boardfrom','validfrom','搭乗期間from'].some(x=>nk.includes(normHeaderKey(x)))) return 'wholeFrom';
+  if (['搭乗期間終了','搭乗終了','boardto','validto','搭乗期間to'].some(x=>nk.includes(normHeaderKey(x)))) return 'wholeTo';
+  if (['価格適用期間開始','適用開始','periodfrom','farefrom','価格適用開始'].some(x=>nk.includes(normHeaderKey(x)))) return 'validFrom';
+  if (['価格適用期間終了','適用終了','periodto','fareto','価格適用終了'].some(x=>nk.includes(normHeaderKey(x)))) return 'validTo';
+  if (['根拠','備考','rule','注記','参照'].some(x=>nk.includes(normHeaderKey(x)))) return 'rule';
+  if (['価格適用期間','適用期間'].some(x=>nk.includes(normHeaderKey(x)))) return 'validRange';
+  if (['alias','別名','入力','候補','表記ゆれ','表記揺れ','synonym'].some(x=>nk.includes(normHeaderKey(x)))) return 'alias';
+  if (['canonical','正規','正規名','統一名','正式名称'].some(x=>nk.includes(normHeaderKey(x)))) return 'canonical';
+  return nk; // fallback
+}
+function normalizeRowKeys(row){
+  const out = {};
+  for (const [k,v] of Object.entries(row||{})){
+    const ck = canonicalKey(k);
+    // keep first non-empty value if duplicates appear
+    const val = (v ?? '').toString().trim();
+    if (!(ck in out) || (out[ck] === '' && val !== '')) out[ck] = val;
+  }
+  return out;
+}
 // ---- robust fetch helpers (avoid SPA fallback returning index.html) ----
 async function fetchTextFirstOk(urls){
   let lastErr = null;
@@ -437,7 +474,7 @@ async function loadDB(){
     const resA = await fetch("./data/place_aliases.csv", { cache: "no-cache" });
     if (resA.ok){
       const a = await resA.text();
-      aliasRows = parseCSV(a);
+      aliasRows = parseCSV(a).map(normalizeRowKeys);
     }
   } catch {}
 
@@ -496,16 +533,19 @@ async function loadDB(){
   }
 
   for (const r of fareRows){
-    const fromRaw = (r["出発地"] ?? r["origin"] ?? "").toString().trim();
-    const toRaw   = (r["到着地"] ?? r["destination"] ?? "").toString().trim();
+    const rr = normalizeRowKeys(r);
+
+    const fromRaw = (rr.from ?? "").toString().trim();
+    const toRaw   = (rr.to   ?? "").toString().trim();
     if (!fromRaw || !toRaw) continue;
 
-    const priceType = (r["価格タイプ"] ?? r["season"] ?? "").toString().trim() || "通常";
-    const fare = parseInt((r["運賃"] ?? r["fare"] ?? "0").toString().replace(/[^0-9-]/g, ""), 10) || 0;
+    const priceType = (rr.priceType ?? "").toString().trim() || "通常";
+    const fare = parseInt((rr.fare ?? "0").toString().replace(/[^0-9-]/g, ""), 10) || 0;
 
     // whole range (optional, but used for year-alignment)
-    const wholeFrom = parseDateLoose((r["搭乗期間開始"] ?? r["valid_from"] ?? "").toString().trim());
-    const wholeTo   = parseDateLoose((r["搭乗期間終了"] ?? r["valid_to"] ?? "").toString().trim());
+ (optional, but used for year-alignment)
+    const wholeFrom = parseDateLoose((rr.wholeFrom ?? rr.valid_from ?? "").toString().trim());
+    const wholeTo   = parseDateLoose((rr.wholeTo ?? rr.valid_to ?? "").toString().trim());
 
     // periods (preferred)
     let periods = splitPeriods((r["価格適用期間"] ?? "").toString().trim());
@@ -543,8 +583,8 @@ async function loadDB(){
 
   // merge external aliases: csv columns = alias, canonical
   for (const a of aliasRows){
-    const alias = (a.alias ?? a["alias"] ?? a["別名"] ?? a["入力"] ?? "").toString().trim();
-    const canon = (a.canonical ?? a["canonical"] ?? a["正規"] ?? a["正規名"] ?? "").toString().trim();
+        const alias = (a.alias ?? '').toString().trim();
+    const canon = (a.canonical ?? '').toString().trim();
     if (!alias || !canon) continue;
     aliasToCanon.set(normKey(alias), canon);
   }
