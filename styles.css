@@ -1,0 +1,169 @@
+:root{
+  --bg:#0b1020;
+  --card:#121a33;
+  --card2:#0f1730;
+  --text:#e9ecf5;
+  --muted:#9aa4c7;
+  --line:rgba(255,255,255,.08);
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --radius:18px;
+  --blue:#5aa7ff;
+  --purple:#a78bfa;
+  --green:#34d399;
+  --red:#fb7185;
+  --amber:#fbbf24;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Hiragino Kaku Gothic ProN","Meiryo", "Noto Sans JP", sans-serif;
+  background: radial-gradient(900px 700px at 20% 0%, rgba(90,167,255,.18), transparent 55%),
+              radial-gradient(900px 700px at 90% 10%, rgba(167,139,250,.18), transparent 55%),
+              radial-gradient(900px 700px at 30% 100%, rgba(52,211,153,.12), transparent 55%),
+              var(--bg);
+  color:var(--text);
+}
+a{color:inherit}
+code{background:rgba(255,255,255,.08); padding:.12rem .35rem; border-radius:.45rem}
+.topbar{
+  position:sticky; top:0;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:14px 18px;
+  backdrop-filter: blur(12px);
+  background: rgba(10,14,30,.75);
+  border-bottom: 1px solid var(--line);
+  z-index:10;
+}
+.brand{display:flex; gap:12px; align-items:center}
+.logo{font-size:22px}
+.titles .title{font-weight:800; letter-spacing:.02em; font-size:16px}
+.titles .subtitle{font-size:12px; color:var(--muted); margin-top:2px}
+.badges{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+.badge{
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.06);
+}
+.badge-blue{border-color: rgba(90,167,255,.35); color:#cfe6ff}
+.badge-purple{border-color: rgba(167,139,250,.35); color:#e6dcff}
+.badge-green{border-color: rgba(52,211,153,.35); color:#d6fff0}
+
+.wrap{max-width:1180px; margin:18px auto 36px; padding:0 16px}
+.card{
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding:16px;
+  margin:14px 0;
+}
+.card-h{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap}
+.card h2{margin:0; font-size:16px}
+.hint{color:var(--muted); font-size:12px; line-height:1.3}
+.grid2{display:grid; grid-template-columns: 1.15fr .85fr; gap:14px; margin-top:14px}
+@media (max-width: 980px){ .grid2{grid-template-columns:1fr} }
+
+textarea, input, select{
+  width:100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(10,14,30,.55);
+  color: var(--text);
+  padding:12px 12px;
+  outline:none;
+}
+textarea:focus, input:focus, select:focus{border-color: rgba(90,167,255,.55)}
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+.row{display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap}
+.btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  padding:10px 14px;
+  border-radius: 14px;
+  cursor:pointer;
+  font-weight:650;
+}
+.btn:hover{background: rgba(255,255,255,.09)}
+.btn.primary{
+  background: linear-gradient(180deg, rgba(90,167,255,.28), rgba(90,167,255,.12));
+  border-color: rgba(90,167,255,.45);
+}
+.btn.ghost{background: transparent}
+.msg{margin-top:10px; font-size:12px; color:var(--muted)}
+.panel{
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.18);
+  padding:12px;
+}
+.panel h3{margin:0 0 10px; font-size:14px}
+.formRow{display:grid; grid-template-columns: 90px 1fr; gap:10px; align-items:center; margin:8px 0}
+.formRow label{color:var(--muted); font-size:12px}
+.divider{height:1px; background:var(--line); margin:12px 0}
+.legs{display:flex; flex-direction:column; gap:8px}
+.legItem{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  padding:10px 10px;
+  border-radius: 14px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.05);
+}
+.legItem .meta{display:flex; flex-direction:column; gap:3px}
+.legItem .meta .m1{font-weight:700}
+.legItem .meta .m2{color:var(--muted); font-size:12px}
+.legItem .actions{display:flex; gap:8px}
+.pill{
+  padding:6px 10px;
+  border-radius: 999px;
+  font-size:12px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.05);
+  white-space:nowrap;
+}
+.pill.red{border-color: rgba(251,113,133,.45); color:#ffd0d9}
+.pill.green{border-color: rgba(52,211,153,.45); color:#c8ffeb}
+
+.totals{justify-content:space-between}
+.kpi{
+  flex:1;
+  min-width:160px;
+  padding:10px 12px;
+  border-radius: 16px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+}
+.kpi-label{font-size:12px; color:var(--muted)}
+.kpi-value{margin-top:6px; font-size:20px; font-weight:850}
+.kpi-value.small{font-size:12px; font-weight:650; color:var(--muted)}
+
+.tableWrap{overflow:auto; margin-top:12px; border-radius: 16px; border:1px solid var(--line)}
+.tbl{width:100%; border-collapse:separate; border-spacing:0; min-width:860px}
+.tbl thead th{
+  position:sticky; top:0;
+  background: rgba(15,23,48,.96);
+  border-bottom: 1px solid var(--line);
+  padding:10px 10px;
+  font-size:12px;
+  color: #cfd6f0;
+  text-align:left;
+}
+.tbl tbody td{
+  border-bottom: 1px solid var(--line);
+  padding:10px 10px;
+  font-size:13px;
+}
+.tbl tbody tr:nth-child(2n) td{background: rgba(255,255,255,.03)}
+.tbl tbody tr:hover td{background: rgba(90,167,255,.08)}
+.tbl .num{text-align:right; font-variant-numeric: tabular-nums}
+.details{margin-top:12px}
+.details summary{cursor:pointer; color:#d6ddff}
+.diag{display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px}
+@media (max-width: 980px){ .diag{grid-template-columns:1fr} }
+.diag-col{border:1px solid var(--line); border-radius:16px; background:rgba(0,0,0,.18); padding:10px}
+.diag-col h4{margin:0 0 8px; font-size:13px}
+.footer{padding:18px; text-align:center; color:var(--muted); font-size:12px}
+.bullets{margin:8px 0 0 20px; color:var(--muted); font-size:13px; line-height:1.6}

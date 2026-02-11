@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>運賃検索（複数旅程対応）</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">✈️</div>
+      <div class="titles">
+        <div class="title">運賃検索</div>
+        <div class="subtitle">複数旅程をまとめて計算（テキスト貼り付け or 追加フォーム）</div>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge badge-blue">CSV自動読込</span>
+      <span class="badge badge-purple">同義語吸収</span>
+      <span class="badge badge-green">期間判定</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="card-h">
+        <h2>① 旅程入力（テキスト貼り付け）</h2>
+        <div class="hint">例：<code>2025-08-21 東京→沖縄</code> / <code>8/22 沖縄→宮古</code>（矢印は → / -> / 〜 などOK）</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <textarea id="itineraryText" class="mono" rows="8" placeholder="例）
+2025-08-21 東京→沖縄
+2025-08-22 沖縄→宮古
+2025-08-24 宮古→東京"></textarea>
+          <div class="row">
+            <button id="btnParse" class="btn primary">解析して検索</button>
+            <button id="btnClear" class="btn ghost">クリア</button>
+          </div>
+          <div id="parseMsg" class="msg"></div>
+        </div>
+
+        <div class="panel">
+          <h3>② 旅程入力（フォームで追加）</h3>
+          <div class="formRow">
+            <label>日付</label>
+            <input id="legDate" type="date" />
+          </div>
+          <div class="formRow">
+            <label>出発地</label>
+            <select id="fromSelect"></select>
+          </div>
+          <div class="formRow">
+            <label>到着地</label>
+            <select id="toSelect"></select>
+          </div>
+          <div class="row">
+            <button id="btnAddLeg" class="btn">旅程を追加</button>
+            <button id="btnResetLegs" class="btn ghost">旅程を全削除</button>
+          </div>
+
+          <div class="divider"></div>
+          <h3>現在の旅程</h3>
+          <div id="legsList" class="legs"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h">
+        <h2>検索結果</h2>
+        <div class="hint">価格タイプ（ピーク/通常）両方ある場合は、該当期間に合致するものを優先。見つからない場合は候補（方向違い・空港別名）も提示。</div>
+      </div>
+
+      <div class="row totals">
+        <div class="kpi">
+          <div class="kpi-label">合計運賃</div>
+          <div class="kpi-value" id="sumFare">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">ヒット</div>
+          <div class="kpi-value" id="hitCount">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">未ヒット</div>
+          <div class="kpi-value" id="missCount">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">データ更新日時</div>
+          <div class="kpi-value small" id="dbMeta">-</div>
+        </div>
+      </div>
+
+      <div class="tableWrap">
+        <table class="tbl" id="resultTable">
+          <thead>
+            <tr>
+              <th style="width:120px">日付</th>
+              <th style="width:160px">出発地</th>
+              <th style="width:160px">到着地</th>
+              <th style="width:100px">価格タイプ</th>
+              <th style="width:120px" class="num">運賃</th>
+              <th>根拠（適用期間）</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <details class="details">
+        <summary>データベース診断（未ヒット原因の特定）</summary>
+        <div class="diag">
+          <div class="diag-col">
+            <h4>正規化マップ（place_aliases.csv）</h4>
+            <pre id="diagAliases" class="mono"></pre>
+          </div>
+          <div class="diag-col">
+            <h4>未ヒット一覧</h4>
+            <pre id="diagMisses" class="mono"></pre>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <div class="card-h">
+        <h2>データ更新について</h2>
+      </div>
+      <ul class="bullets">
+        <li>このサイトは <code>data/fare_source.tsv</code>（あなたの貼り付けデータ）を読み込み、ブラウザ内で自動的に正規化して検索します。サーバー側の変換作業は不要です。</li>
+        <li>CSV/TSVは「UTF-8（BOMあり）」を推奨（文字化け対策）。</li>
+        <li>列名は以下が必須です：<code>搭乗期間開始</code> <code>搭乗期間終了</code> <code>出発地</code> <code>到着地</code> <code>価格タイプ</code> <code>運賃</code> <code>価格適用期間</code></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>© Internal Tool • Transport Fare Calculator</div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
