@@ -5,10 +5,10 @@
  */
 const DB = {
   meta: { loadedAt: null, rowCount: 0 },
-  fares: [],         // normalized rows: {from,to,validFrom,validTo,priceType,fare,seasonLabel,srcPeriodStart,srcPeriodEnd}
-  routeMap: new Map(), // normKey(from)||normKey(to) -> fare rows (array)
-  places: [],        // canonical places from fares
-  aliasToCanon: new Map(), // normalized token -> canonical
+  faresRows: [],      // array of normalized fare rows
+  routeMap: new Map(), // key=from||to -> array of rows
+  places: [],
+  aliasToCanon: new Map(),
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -179,7 +179,7 @@ function parseCSV(text){
   }
   if (cell.length || cur.length) { cur.push(cell); rows.push(cur); }
   if (!rows.length) return [];
-  const header = rows[0].map(h=>h.trim());
+  const header = rows[0].map(h=> (h ?? "").toString().replace(/^\ufeff/, "").trim());
   const out = [];
   for (let i=1;i<rows.length;i++){
     if (rows[i].every(x => (x ?? "").trim() === "")) continue;
@@ -269,20 +269,20 @@ function findFare(date, from, to){
   };
 
   // exact direction first
-  let best = pick(listFT || DB.fares.filter(r => r.from === f && r.to === t));
+  let best = pick(listFT || DB.routeMap.filter(r => r.from === f && r.to === t));
   if (best){
     return { hit:true, row:best, from:f, to:t, tried:[`${f}→${t}`] };
   }
 
   // try reverse direction (some data may be one-way)
-  best = pick(listTF || DB.fares.filter(r => r.from === t && r.to === f));
+  best = pick(listTF || DB.routeMap.filter(r => r.from === t && r.to === f));
   if (best){
     return { hit:true, row:{...best, note:"※逆方向データを使用"}, from:f, to:t, tried:[`${f}→${t}`, `${t}→${f}`] };
   }
 
   // no hit
   // show top 5 near matches by from/to only
-  const near = DB.fares.filter(r => (r.from===f && r.to===t) || (r.from===t && r.to===f));
+  const near = DB.routeMap.filter(r => (r.from===f && r.to===t) || (r.from===t && r.to===f));
   near.sort((a,b)=> a.validFrom - b.validFrom);
   return { hit:false, row:null, from:f, to:t, tried:[`${f}→${t}`, `${t}→${f}`], near: near.slice(0,5) };
 }
@@ -355,21 +355,47 @@ function renderLegs(){
 function renderSelectOptions(){
   const fromSel = $("#fromSelect");
   const toSel = $("#toSelect");
-  fromSel.innerHTML = "";
-  toSel.innerHTML = "";
+  const via1Sel = $("#via1Select");
+  const via2Sel = $("#via2Select");
+
+  const prev = {
+    from: fromSel?.value || "",
+    to: toSel?.value || "",
+    via1: via1Sel?.value || "",
+    via2: via2Sel?.value || ""
+  };
+
   const opts = DB.places.slice().sort((a,b)=>a.localeCompare(b,"ja"));
-  for (const p of opts){
-    const o1 = document.createElement("option");
-    o1.value = p; o1.textContent = p;
-    const o2 = document.createElement("option");
-    o2.value = p; o2.textContent = p;
-    fromSel.appendChild(o1);
-    toSel.appendChild(o2);
+
+  function fill(sel, includeBlank){
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (includeBlank){
+      const ob = document.createElement("option");
+      ob.value = ""; ob.textContent = "（未指定）";
+      sel.appendChild(ob);
+    }
+    for (const p of opts){
+      const o = document.createElement("option");
+      o.value = p; o.textContent = p;
+      sel.appendChild(o);
+    }
   }
-  // reasonable defaults
-  if (opts.includes("東京")) fromSel.value = "東京";
-  if (opts.includes("沖縄")) toSel.value = "沖縄";
+
+  fill(fromSel, false);
+  fill(toSel, false);
+  fill(via1Sel, true);
+  fill(via2Sel, true);
+
+  if (prev.from && opts.includes(prev.from)) fromSel.value = prev.from;
+  if (prev.to && opts.includes(prev.to)) toSel.value = prev.to;
+  if (prev.via1 && opts.includes(prev.via1)) via1Sel.value = prev.via1;
+  if (prev.via2 && opts.includes(prev.via2)) via2Sel.value = prev.via2;
+
+  if (!fromSel.value && opts.includes("東京")) fromSel.value = "東京";
+  if (!toSel.value && opts.includes("沖縄")) toSel.value = "沖縄";
 }
+
 
 function renderResults(rows, misses){
   const tbody = $("#resultTable tbody");
@@ -410,7 +436,11 @@ function renderResults(rows, misses){
 }
 
 function runSearch(){
-  if (!DB.fares.length) return;
+  if (!DB.faresRows || DB.faresRows.length === 0) {
+    renderResults([], []);
+    $("#parseMsg").textContent = "DB未読み込み（運賃データ0件）です。data/transport.csv を確認してください。";
+    return;
+  }
 
   const legs = window.__legs || [];
   if (!legs.length){
@@ -601,7 +631,7 @@ async function loadDB(){
   }
 
   // store
-  DB.fares = fares;
+  DB.faresRows = fares;
   DB.routeMap = map;
   DB.places = places;
   DB.aliasToCanon = aliasToCanon;
@@ -647,11 +677,34 @@ function bindUI(){
     const d = $("#legDate").value ? parseDateLoose($("#legDate").value) : null;
     const from = $("#fromSelect").value;
     const to = $("#toSelect").value;
+    const via1 = $("#via1Select") ? $("#via1Select").value : "";
+    const via2 = $("#via2Select") ? $("#via2Select").value : "";
+
     if (!d || !from || !to){
       $("#parseMsg").textContent = "日付・出発地・到着地を指定してください。";
       return;
     }
-    window.__legs.push({ date: d, from, to, raw: `${ymd(d)} ${from}→${to}` });
+
+    const legsToAdd = [];
+    if (via1 || via2){
+      legsToAdd.push({ date: d, from, to, raw: `${ymd(d)} ${from}→${to}（直行候補）`, tag: "direct" });
+
+      if (via1 && via2){
+        legsToAdd.push({ date: d, from, to: via1, raw: `${ymd(d)} ${from}→${via1}（経由①）`, tag: "via" });
+        legsToAdd.push({ date: d, from: via1, to: via2, raw: `${ymd(d)} ${via1}→${via2}（経由②）`, tag: "via" });
+        legsToAdd.push({ date: d, from: via2, to, raw: `${ymd(d)} ${via2}→${to}（経由③）`, tag: "via" });
+      } else if (via1){
+        legsToAdd.push({ date: d, from, to: via1, raw: `${ymd(d)} ${from}→${via1}（経由①）`, tag: "via" });
+        legsToAdd.push({ date: d, from: via1, to, raw: `${ymd(d)} ${via1}→${to}（経由②）`, tag: "via" });
+      } else if (via2){
+        legsToAdd.push({ date: d, from, to: via2, raw: `${ymd(d)} ${from}→${via2}（経由①）`, tag: "via" });
+        legsToAdd.push({ date: d, from: via2, to, raw: `${ymd(d)} ${via2}→${to}（経由②）`, tag: "via" });
+      }
+    } else {
+      legsToAdd.push({ date: d, from, to, raw: `${ymd(d)} ${from}→${to}`, tag: "" });
+    }
+
+    window.__legs.push(...legsToAdd);
     renderLegs();
     runSearch();
   });
